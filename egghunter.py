@@ -5,22 +5,20 @@ import keystone as ks
 
 
 def is_valid_tag_count(s):
-    return True if len(s) == 4 else False
+    return len(s) == 4
 
 
 def tag_to_hex(s):
     string = s
-    if is_valid_tag_count(s) == False:
+    if is_valid_tag_count(string) == False:
         args.tag = "c0d3"
         string = args.tag
-    retval = list()
-    for char in string:
-        retval.append(hex(ord(char)).replace("0x", ""))
+    retval = [hex(ord(char)).replace("0x", "") for char in string]
     return "0x" + "".join(retval[::-1])
 
 
 def ntaccess_hunter(tag):
-    asm = f"""
+    return f"""
     loop_inc_page:
         or dx, 0x0fff
     loop_inc_one:
@@ -45,7 +43,6 @@ def ntaccess_hunter(tag):
     matched_both_halves:
         jmp edi
     """
-    return asm
 
 
 def seh_hunter(tag):
@@ -114,9 +111,7 @@ def main(args):
                 spacer = 30 - len(line)
                 print("%s %s %s" % (line, (" " * spacer), enc_opcode))
 
-    final = ""
-    final += 'egghunter = b"'
-
+    final = "" + 'egghunter = b"'
     for enc in encoding:
         final += "\\x{0:02x}".format(enc)
 
@@ -133,7 +128,7 @@ def main(args):
         print(f"[=] {final[14:-1]}", file=sys.stderr)
         raise SystemExit("[!] Remove bad characters and try again")
 
-    print(f"[+] egghunter created!")
+    print("[+] egghunter created!")
     print(f"[=]   len: {len(encoding)} bytes")
     print(f"[=]   tag: {args.tag * 2}")
     print(f"[=]   ver: {['NtAccessCheckAndAuditAlarm', 'SEH'][args.seh]}\n")

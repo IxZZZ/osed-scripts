@@ -22,7 +22,7 @@ def hex_byte(byte_str):
 
 class Memdump:
     def __init__(self, line):
-        self.__bytes = list()
+        self.__bytes = []
         self.__address = ""
         self._parse_line(line)
 
@@ -65,12 +65,9 @@ class Memdump:
         self.bytes = bytes_str
 
     def __str__(self):
-        byte_str = ""
-        for byte in self.bytes:
-            if byte == "??":
-                byte_str += f"{byte} "
-            else:
-                byte_str += f"{byte:02X} "
+        byte_str = "".join(
+            f"{byte} " if byte == "??" else f"{byte:02X} " for byte in self.bytes
+        )
 
         return f"{self.address}  {byte_str}"
 
