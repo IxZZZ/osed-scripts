@@ -53,10 +53,7 @@ class Gadgetizer:
         return rs
 
     def get_gadgets(self, search_str, quality=1, strict=False):
-        gadgets = [
-            (f, g)
-            for f, g in self.ropper_svc.search(search=search_str, quality=quality)
-        ]  # could be memory hog
+        gadgets = list(self.ropper_svc.search(search=search_str, quality=quality))
 
         if not gadgets and quality < self.ropper_svc.options.inst_count and not strict:
             # attempt highest quality gadget, continue requesting with lower quality until something is returned
@@ -107,7 +104,7 @@ class Gadgetizer:
         tree.add(self._search_gadget("negate register", [f"neg {reg_prefix}??;"]))
         tree.add(self._search_gadget("xor register", [f"xor {reg_prefix}??, 0x????????"]))
         tree.add(self._search_gadget("push", [f"push {reg_prefix}??;"]))
-        tree.add(self._search_gadget("pushad", [f"pushad;"]))
+        tree.add(self._search_gadget("pushad", ["pushad;"]))
         tree.add(self._search_gadget("pop", [f"pop {reg_prefix}??;"]))
         tree.add(
             self._search_gadget(
@@ -123,13 +120,22 @@ class Gadgetizer:
             f"{reg_prefix}si",
             f"{reg_prefix}di",
         ]:
-            zeroize_strs.append(f"xor {reg}, {reg};")
-            zeroize_strs.append(f"sub {reg}, {reg};")
-            zeroize_strs.append(f"lea [{reg}], 0;")
-            zeroize_strs.append(f"mov {reg}, 0;")
-            zeroize_strs.append(f"and {reg}, 0;")
-            eip_to_esp_strs.append(f"xchg {reg_prefix}sp, {reg}; jmp {reg};")
-            eip_to_esp_strs.append(f"xchg {reg_prefix}sp, {reg}; call {reg};")
+            zeroize_strs.extend(
+                (
+                    f"xor {reg}, {reg};",
+                    f"sub {reg}, {reg};",
+                    f"lea [{reg}], 0;",
+                    f"mov {reg}, 0;",
+                    f"and {reg}, 0;",
+                )
+            )
+
+            eip_to_esp_strs.extend(
+                (
+                    f"xchg {reg_prefix}sp, {reg}; jmp {reg};",
+                    f"xchg {reg_prefix}sp, {reg}; call {reg};",
+                )
+            )
 
         tree.add(self._search_gadget("zeroize", zeroize_strs))
         tree.add(self._search_gadget("eip to esp", eip_to_esp_strs))
@@ -154,15 +160,18 @@ def add_missing_gadgets(ropper_addresses: set, in_file, outfile, bad_bytes, base
     elif platform.system() == "Darwin":
         fname = 'rp-osx-x64'
 
-    rp = Path('~/.local/bin/' + fname).expanduser().resolve()
+    rp = Path(f'~/.local/bin/{fname}').expanduser().resolve()
 
     if not rp.exists():
-        print(f"[bright_yellow][*][/bright_yellow] rp++ not found, downloading...")
+        print("[bright_yellow][*][/bright_yellow] rp++ not found, downloading...")
         rp.parent.mkdir(parents=True, exist_ok=True)
 
         wget = shutil.which('wget')
         if not wget:
-            print(f"[bright_red][!][/bright_red] wget not found, please install it or add -s|--skip-rp to your command")
+            print(
+                "[bright_red][!][/bright_red] wget not found, please install it or add -s|--skip-rp to your command"
+            )
+
             return
 
         subprocess.run(f'{wget} https://github.com/0vercl0k/rp/releases/download/v2.0.2/{fname} -O {rp}'.split())
@@ -229,24 +238,25 @@ def print_useful_regex(outfile, arch):
     len_sort = "| awk '{ print length, $0 }' | sort -n -s -r | cut -d' ' -f2- | tail"
     any_reg = f'{reg_prefix}..'
 
-    search_terms = list()
-    search_terms.append(f'(jmp|call) {reg_prefix}sp;')
-    search_terms.append(fr'mov {any_reg}, \[{any_reg}\];')
-    search_terms.append(fr'mov \[{any_reg}\], {any_reg};')
-    search_terms.append(fr'mov {any_reg}, {any_reg};')
-    search_terms.append(fr'xchg {any_reg}, {any_reg};')
-    search_terms.append(fr'push {any_reg};.*pop {any_reg};')
-    search_terms.append(fr'inc {any_reg};')
-    search_terms.append(fr'dec {any_reg};')
-    search_terms.append(fr'neg {any_reg};')
-    search_terms.append(fr'push {any_reg};')
-    search_terms.append(fr'pop {any_reg};')
-    search_terms.append('pushad;')
-    search_terms.append(fr'and {any_reg}, ({any_reg}|0x.+?);')
-    search_terms.append(fr'xor {any_reg}, ({any_reg}|0x.+?);')
-    search_terms.append(fr'add {any_reg}, ({any_reg}|0x.+?);')
-    search_terms.append(fr'sub {any_reg}, ({any_reg}|0x.+?);')
-    search_terms.append(fr'(lea|mov|and) \[?{any_reg}\]?, 0;')
+    search_terms = [
+        f'(jmp|call) {reg_prefix}sp;',
+        fr'mov {any_reg}, \[{any_reg}\];',
+        fr'mov \[{any_reg}\], {any_reg};',
+        fr'mov {any_reg}, {any_reg};',
+        fr'xchg {any_reg}, {any_reg};',
+        fr'push {any_reg};.*pop {any_reg};',
+        fr'inc {any_reg};',
+        fr'dec {any_reg};',
+        fr'neg {any_reg};',
+        fr'push {any_reg};',
+        fr'pop {any_reg};',
+        'pushad;',
+        fr'and {any_reg}, ({any_reg}|0x.+?);',
+        fr'xor {any_reg}, ({any_reg}|0x.+?);',
+        fr'add {any_reg}, ({any_reg}|0x.+?);',
+        fr'sub {any_reg}, ({any_reg}|0x.+?);',
+        fr'(lea|mov|and) \[?{any_reg}\]?, 0;',
+    ]
 
     print(f"[bright_green][+][/bright_green] helpful regex for searching within {outfile}\n")
 

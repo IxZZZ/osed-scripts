@@ -51,10 +51,7 @@ class PopR32(Enum):
 
 
 def checkBadChars(bAddr, badChars):
-    for i in bAddr:
-        if i in badChars:
-            return "--"
-    return "OK"
+    return next(("--" for i in bAddr if i in badChars), "OK")
 
 
 def main(args):
@@ -88,9 +85,7 @@ def main(args):
                     try:
                         bAddr = int(addr, 16).to_bytes(4, "little")
                         bcChk = checkBadChars(bAddr, args.bad)
-                        bAddrEsc = ""  # This is the escaped string containing the little endian addr for shellcode output
-                        for b in bAddr:
-                            bAddrEsc += "\\x{:02X}".format(b)
+                        bAddrEsc = "".join("\\x{:02X}".format(b) for b in bAddr)
                         if args.showbc and bcChk == "--":
                             print(
                                 f"[{bcChk}] {module.name}::{addr}: pop {PopR32(pop1).name}; pop {PopR32(pop2).name}; ret ; {bAddrEsc}"
@@ -99,15 +94,13 @@ def main(args):
                             print(
                                 f"[{bcChk}] {module.name}::{addr}: pop {PopR32(pop1).name}; pop {PopR32(pop2).name}; ret ; {bAddrEsc}"
                             )
-                            numGadgets = numGadgets + 1
+                            numGadgets += 1
                     except ValueError:
                         # not a valid pop r32
                         pass
         print(f"[+] {module.name}: Found {numGadgets} usable gadgets!")
         modGadgetCount[module.name] = numGadgets  # Add to the dict
-        totalGadgets = (
-            totalGadgets + numGadgets
-        )  # Increment total number of gadgets found
+        totalGadgets += numGadgets
     print("\n---- STATS ----")  # Print out all the stats
     print(">> BADCHARS: ", end="")
     for i in args.bad:

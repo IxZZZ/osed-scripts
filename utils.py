@@ -44,7 +44,7 @@ def get_connection(ip: str, port: int) -> socket.socket:
 
 
 def sanity_check(byte_str: bytes, bad_chars: List[int]):
-    baddies = list()
+    baddies = []
 
     for bc in bad_chars:
         if bc in byte_str:
